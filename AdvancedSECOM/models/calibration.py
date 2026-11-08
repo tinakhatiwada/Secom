@@ -42,13 +42,24 @@ class CalibrationMixin:
                 best_thr = 0.5
             return model, best_thr
 
+        # AUDIT FIX (F8): cv="prefit" was removed in scikit-learn >= 1.6, so the
+        # original code silently caught the error and returned the UNCALIBRATED
+        # model while the paper claimed calibration. Use FrozenEstimator on new
+        # sklearn, fall back to cv="prefit" on old sklearn, and warn (never
+        # silently) if calibration genuinely fails.
         try:
-            cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
+            try:
+                from sklearn.frozen import FrozenEstimator            # sklearn >= 1.6
+                cal = CalibratedClassifierCV(FrozenEstimator(model), method="isotonic")
+            except ImportError:
+                cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
             cal.fit(X_cal_fit, y_cal_fit)
             val_proba = cal.predict_proba(X_cal_val)[:, 1]
             best_thr, _ = self.optimize_threshold(y_cal_val, val_proba)
             return cal, best_thr
-        except Exception:
+        except Exception as e:
+            print(f"    [WARN] Calibration failed ({e}); using UNCALIBRATED model. "
+                  "Reported probabilities are NOT calibrated.")
             try:
                 raw_proba = model.predict_proba(X_cal_val)[:, 1]
                 best_thr, _ = self.optimize_threshold(y_cal_val, raw_proba)

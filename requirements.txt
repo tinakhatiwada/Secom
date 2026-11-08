@@ -1,0 +1,20 @@
+# SECOM predictive-maintenance pipeline — pinned environment.
+# These are the versions used to produce the revised (audit re-run) results.
+# Pinning matters: cv="prefit" calibration broke between sklearn versions, which
+# silently disabled calibration. Re-pin here if you re-run on a different stack,
+# and regenerate all reported numbers so the paper and the code agree.
+numpy==2.5.3
+pandas==3.0.5
+scipy==1.18.1
+scikit-learn==1.9.1
+imbalanced-learn==0.14.2
+xgboost==3.4.1
+lightgbm==4.7.0
+statsmodels==0.15.0
+joblib==1.6.0
+matplotlib==3.11.2
+seaborn>=0.13
+# Optional (interpretability / extra models); omit if unused:
+# shap>=0.46
+# lime>=0.2.0.1
+# catboost>=1.2

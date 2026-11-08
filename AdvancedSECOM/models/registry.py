@@ -44,9 +44,11 @@ class ModelRegistryMixin:
             "Gradient Boosting": GradientBoostingClassifier(
                 n_estimators=200, learning_rate=0.05, max_depth=8,
                 random_state=self.random_state, subsample=0.8, min_samples_leaf=5),
+            # AUDIT FIX: the `algorithm` kwarg was removed in scikit-learn >= 1.6
+            # (SAMME is now the only option), so the original raised TypeError on
+            # current sklearn. Dropped for forward compatibility.
             "AdaBoost": AdaBoostClassifier(
-                n_estimators=100, learning_rate=0.8, random_state=self.random_state,
-                algorithm="SAMME"),
+                n_estimators=100, learning_rate=0.8, random_state=self.random_state),
             "SVM RBF": SVC(
                 kernel="rbf", probability=True, random_state=self.random_state,
                 class_weight="balanced"),

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from ..dependencies import (
     traceback, pd, clone,
-    GridSearchCV,
+    GridSearchCV, StratifiedKFold, ImbPipeline,
 )
 
 
@@ -50,22 +50,40 @@ class TuningMixin:
 
             print(f"\nOptimising {mn} with {sm} …")
             sampler = samplers.get(sm)
+
+            # AUDIT FIX (F9): the original code resampled the FULL training set
+            # and THEN ran GridSearchCV, so SMOTE synthetic points leaked across
+            # CV folds — inflating CV scores to ~1.0 (see audit B3). The sampler
+            # must live INSIDE the cross-validation pipeline so each fold is
+            # resampled from its own training portion only.
+            skf = StratifiedKFold(n_splits=3, shuffle=True,
+                                  random_state=self.random_state)
+            grid = {f"model__{k}": v for k, v in param_grids[mn].items()}
+            if sampler is not None:
+                est = ImbPipeline([("sampler", clone(sampler)),
+                                   ("model",   self.get_advanced_models()[mn])])
+            else:
+                est = ImbPipeline([("model", self.get_advanced_models()[mn])])
+            search = GridSearchCV(est, grid, cv=skf,
+                                  scoring="average_precision", n_jobs=-1, verbose=0)
+            search.fit(self.X_train, self.y_train)   # raw train — no pre-resampling
+
+            # Rebuild the tuned base model, then evaluate it through the same
+            # resample→fit→calibrate path used for every other configuration.
+            best_params = {k.replace("model__", ""): v
+                           for k, v in search.best_params_.items()}
+            tuned_model = self.get_advanced_models()[mn].set_params(**best_params)
             X_res, y_res = self.X_train.copy(), self.y_train.copy()
             if sampler is not None:
                 X_res, y_res = clone(sampler).fit_resample(X_res, y_res)
 
-            search = GridSearchCV(
-                self.get_advanced_models()[mn], param_grids[mn],
-                cv=3, scoring="average_precision", n_jobs=-1, verbose=0)
-            search.fit(X_res, y_res)
-
             opt_key = f"{key}_OPTIMIZED"
             try:
                 self._evaluate_and_store(
-                    key=opt_key, model=search.best_estimator_,
+                    key=opt_key, model=tuned_model,
                     model_name=f"{mn} (Optimized)", sampling_method=sm,
                     X_resampled=X_res, y_resampled=y_res, sampler=sampler)
-                self.results[opt_key]["best_params"] = search.best_params_
+                self.results[opt_key]["best_params"] = best_params
                 print(f"  Best params : {search.best_params_}")
                 print(f"  Opt F1      : {self.results[opt_key]['f1_score']:.4f} "
                       f"(orig: {res['f1_score']:.4f})")
