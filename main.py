@@ -3,7 +3,7 @@ main.py — Entry point for the AdvancedSECOM pipeline.
 Equivalent to the main() function previously in dm1.py.
 """
 from pathlib import Path
-from AdvancedSECOM import AdvancedSECOM, MultiSeedRunner
+from AdvancedSECOM import AdvancedSECOM
 
 
 def main():
@@ -46,17 +46,21 @@ def main():
     best_key, best_result = secom.generate_final_report()
     print("\n✅ Analysis complete.")
 
-    # ── Optional multi-seed robustness check ──────────────────────────────
-    run_multiseed = False   # set True to produce Table with mean ± std
-    if run_multiseed:
-        runner = MultiSeedRunner(
+    # ── Optional multi-seed robustness / reviewer evidence ────────────────
+    # Produces the multi-seed table (Balanced Bagging + cost-sensitive baseline
+    # + all leading configs), per-seed thresholds, McNemar significance,
+    # calibration diagnostics (Brier/ECE + reliability diagram) and the
+    # chronological-split result. This is the SINGLE correct multi-seed path
+    # (the old MultiSeedRunner, which ran the wrong models with no baseline,
+    # thresholds or calibration, is no longer used). Seeds = 42 plus nine more,
+    # matching the manuscript.
+    run_evidence = False   # set True to regenerate all reviewer-facing tables/figures
+    if run_evidence:
+        from run_all import reproduce_all
+        reproduce_all(
             data_dir=secom.data_dir,
-            output_dir=script_dir / "output" / "multiseed",
-            seeds=range(10),
-            model_names=["Balanced Random Forest", "XGBoost",
-                         "CatBoost", "LightGBM"],
-            sampler_name="SMOTE")
-        runner.run()
+            out_dir=script_dir / "output" / "evidence",
+            seeds=[42, 1, 2, 3, 4, 5, 6, 7, 8, 9])
 
     return secom, best_key, best_result
 

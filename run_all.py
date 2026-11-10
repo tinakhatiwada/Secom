@@ -179,11 +179,30 @@ def chronological():
     (OUT/"chronological.json").write_text(json.dumps(res, default=float, indent=2))
     print("\n[Chronological split]:\n", json.dumps(res, default=float, indent=2)); return res
 
+def reproduce_all(data_dir=None, out_dir=None, seeds=None):
+    """Single entry point for all reviewer-facing evidence. Callable from
+    main.py so there is ONE multi-seed path, not two.
+    data_dir : folder holding secom.data + secom_labels.data (default ./secom/)
+    out_dir  : where CSV/JSON/PNG go (default ./output/)
+    seeds    : seed list (default = seed 42 plus nine further seeds, 42,1..9)
+    """
+    global DATA, OUT
+    if data_dir is not None:
+        DATA = Path(data_dir)
+    if out_dir is not None:
+        OUT = Path(out_dir); OUT.mkdir(parents=True, exist_ok=True)
+    if seeds is None:
+        seeds = [42, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    print("=" * 60, "\nReproducing SECOM benchmark results (seeds:",
+          list(seeds), ")\n", "=" * 60)
+    table1(seeds); mcnemar_table(); calibration(); chronological()
+    print(f"\nAll outputs written to {OUT}/")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true", help="3 seeds instead of 10")
     args = ap.parse_args()
-    seeds = range(3) if args.quick else range(10)
-    print("="*60, "\nReproducing SECOM benchmark results\n", "="*60)
-    table1(seeds); mcnemar_table(); calibration(); chronological()
-    print("\nAll outputs written to ./output/")
+    # Seed 42 (the main-experiment seed) plus further seeds, matching the
+    # manuscript text and revision_experiments.py. NOT range(10) (0-9).
+    reproduce_all(seeds=[42, 1, 2] if args.quick else [42, 1, 2, 3, 4, 5, 6, 7, 8, 9])
