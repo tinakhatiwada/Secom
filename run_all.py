@@ -102,7 +102,33 @@ def table1(seeds):
         thr_mean=("threshold","mean"), thr_std=("threshold","std"),
         n_seeds=("seed","nunique")).sort_values("F1_mean", ascending=False).round(4)
     agg.to_csv(OUT/"table1_multiseed.csv")
+    df.to_csv(OUT/"per_seed_metrics.csv", index=False)   # per-seed values for paired tests
     print("\n[Table 1] multi-seed:\n", agg.to_string()); return agg
+
+def significance(headline="Balanced Bagging + SMOTE"):
+    """Proper test for 'is the headline model better?': paired Wilcoxon / t-test
+    on the per-seed F1 values (not single-seed McNemar), plus a bootstrap CI of
+    the mean F1 difference. Answers R1-Q4 at the seed level."""
+    from scipy import stats
+    df = pd.read_csv(OUT/"per_seed_metrics.csv")
+    piv = df.pivot(index="seed", columns="config", values="F1").dropna()
+    a = piv[headline].values
+    rows = []
+    for c in piv.columns:
+        if c == headline: continue
+        b = piv[c].values
+        diff = a - b
+        boot = [np.mean(np.random.choice(diff, len(diff), replace=True)) for _ in range(5000)]
+        lo, hi = np.percentile(boot, [2.5, 97.5])
+        rows.append(dict(vs=c, mean_diff=round(float(diff.mean()), 4),
+                         ci95=f"[{lo:+.3f}, {hi:+.3f}]",
+                         paired_t_p=round(float(stats.ttest_rel(a, b).pvalue), 3),
+                         wilcoxon_p=round(float(stats.wilcoxon(a, b).pvalue), 3)))
+    out = pd.DataFrame(rows)
+    out.to_csv(OUT/"significance_tests.csv", index=False)
+    print(f"\n[Significance] paired tests of {headline} vs each config (per-seed F1):\n",
+          out.to_string(index=False))
+    return out
 
 def mcnemar_table():
     s = prep(SEED); yt = s.y_test.values; M, S = models(SEED), samplers(SEED)
@@ -113,10 +139,18 @@ def mcnemar_table():
         n10, n01 = int(np.sum(ca & ~cb)), int(np.sum(~ca & cb))
         tab = np.array([[int(np.sum(ca & cb)), n10], [n01, int(np.sum(~ca & ~cb))]])
         p = mcnemar(tab, exact=(n10 + n01) < 25).pvalue
-        rows.append(dict(A=a, B=b, A_only=n10, B_only=n01, p_value=round(float(p), 4),
-                         significant=p < 0.05))
-    df = pd.DataFrame(rows); df.to_csv(OUT/"mcnemar.csv", index=False)
-    print("\n[McNemar] seed", SEED, ":\n", df.to_string(index=False)); return df
+        rows.append(dict(A=a, B=b, A_only=n10, B_only=n01, p_value=round(float(p), 4)))
+    df = pd.DataFrame(rows)
+    # Bonferroni correction over all pairwise comparisons (consistent with the
+    # drift analysis). Single-seed McNemar is secondary to the paired test above.
+    k = len(df); alpha_bonf = 0.05 / k
+    df["sig_raw_0.05"] = df["p_value"] < 0.05
+    df["sig_bonferroni"] = df["p_value"] < alpha_bonf
+    df.to_csv(OUT/"mcnemar.csv", index=False)
+    print(f"\n[McNemar] seed {SEED} ({k} comparisons; Bonferroni alpha={alpha_bonf:.4f}; "
+          f"raw sig={int(df['sig_raw_0.05'].sum())}, Bonferroni sig={int(df['sig_bonferroni'].sum())}):\n",
+          df.to_string(index=False))
+    return df
 
 def calibration():
     s = prep(SEED); yt = s.y_test.values
@@ -195,7 +229,7 @@ def reproduce_all(data_dir=None, out_dir=None, seeds=None):
         seeds = [42, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     print("=" * 60, "\nReproducing SECOM benchmark results (seeds:",
           list(seeds), ")\n", "=" * 60)
-    table1(seeds); mcnemar_table(); calibration(); chronological()
+    table1(seeds); significance(); mcnemar_table(); calibration(); chronological()
     print(f"\nAll outputs written to {OUT}/")
 
 

@@ -13,10 +13,10 @@ def main():
     try:
         script_dir = Path(__file__).resolve().parent
     except NameError:
-        script_dir = Path(r"C:\Users\sansk\Downloads\revisionAI\secom")
+        script_dir = Path(r"C:\Users\sansk\Downloads\Secom\secom")
 
     secom = AdvancedSECOM(
-        data_dir=Path(r"C:\Users\sansk\Downloads\revisionAI\secom"),
+        data_dir=Path(r"C:\Users\sansk\Downloads\Secom\secom"),
         output_dir=script_dir / "output",
         random_state=42,
     )
@@ -54,7 +54,7 @@ def main():
     # (the old MultiSeedRunner, which ran the wrong models with no baseline,
     # thresholds or calibration, is no longer used). Seeds = 42 plus nine more,
     # matching the manuscript.
-    run_evidence = False   # set True to regenerate all reviewer-facing tables/figures
+    run_evidence = True  # set True to regenerate all reviewer-facing tables/figures
     if run_evidence:
         from run_all import reproduce_all
         reproduce_all(
